@@ -58,6 +58,7 @@ function pino (opts) {
   })
 
   var setOpts = {
+    name: opts.name,
     transmit,
     serialize,
     asObject: opts.browser.asObject,
@@ -182,7 +183,7 @@ function wrap (opts, logger, level) {
       if (opts.serialize && !opts.asObject) {
         applySerializers(args, this._serialize, this.serializers, this._stdErrSerialize)
       }
-      if (opts.asObject) write.call(proto, asObject(this, level, args, ts))
+      if (opts.asObject) write.call(proto, asObject(this, level, args, ts, opts.name))
       else write.apply(proto, args)
 
       if (opts.transmit) {
@@ -204,11 +205,11 @@ function wrap (opts, logger, level) {
   })(logger[level])
 }
 
-function asObject (logger, level, args, ts) {
+function asObject (logger, level, args, ts, name) {
   if (logger._serialize) applySerializers(args, logger._serialize, logger.serializers, logger._stdErrSerialize)
   var argsCloned = args.slice()
   var msg = argsCloned[0]
-  var o = { time: ts, level: pino.levels.values[level] }
+  var o = { time: ts, level: pino.levels.values[level], name }
   var lvl = (logger._childLevel | 0) + 1
   if (lvl < 1) lvl = 1
   // deliberate, catching objects, arrays
@@ -306,7 +307,7 @@ function noop () {}
 /* istanbul ignore next */
 function pfGlobalThisOrFallback () {
   function defd (o) { return typeof o !== 'undefined' && o }
-  try { 
+  try {
     if (typeof globalThis !== 'undefined') return globalThis
     Object.defineProperty(Object.prototype, 'globalThis', {
       get: function () {
@@ -316,7 +317,7 @@ function pfGlobalThisOrFallback () {
       configurable: true
     })
     return globalThis
-  } catch (e) { 
+  } catch (e) {
     return defd(self) || defd(window) || defd(this) || {}
   }
 }
