@@ -2,7 +2,7 @@
 
 # pino
 [![Build Status](https://img.shields.io/github/workflow/status/pinojs/pino/CI)](https://github.com/pinojs/pino/actions)
-&nbsp;[![js-standard-style](https://img.shields.io/badge/code%20style-standard-brightgreen.svg?style=flat)](http://standardjs.com/)
+&nbsp;[![js-standard-style](https://img.shields.io/badge/code%20style-standard-brightgreen.svg?style=flat)](https://standardjs.com/)
 &nbsp;[![TypeScript definitions on DefinitelyTyped](https://img.shields.io/badge/DefinitelyTyped-.d.ts-brightgreen.svg?style=flat)](https://definitelytyped.org)
 
 [Very low overhead](#low-overhead) Node.js logger.
@@ -123,16 +123,6 @@ See the [Benchmarks](docs/benchmarks.md) document for comparisons.
 
 <https://twitter.com/wa7son>
 
-## Communication
-
-### Chat on Gitter
-
-<https://gitter.im/pinojs/pino>
-
-### Chat on IRC
-
-You'll find an active group of Pino users in the #pinojs channel on Freenode, including some of the contributors to this project.
-
 ## Contributing
 
 Pino is an **OPEN Open Source Project**. This means that:
@@ -144,7 +134,7 @@ See the [CONTRIBUTING.md](https://github.com/pinojs/pino/blob/master/CONTRIBUTIN
 <a name="acknowledgements"></a>
 ## Acknowledgements
 
-This project was kindly sponsored by [nearForm](http://nearform.com).
+This project was kindly sponsored by [nearForm](https://nearform.com).
 
 Logo and identity designed by Cosmic Fox Design: https://www.behance.net/cosmicfox.
 
