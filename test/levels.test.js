@@ -4,6 +4,8 @@ const { test } = require('tap')
 const { sink, once, check } = require('./helper')
 const pino = require('../')
 
+const levelsLib = require('../lib/levels')
+
 // Silence all warnings for this test
 process.removeAllListeners('warning')
 process.on('warning', () => {})
@@ -105,7 +107,7 @@ test('level-change event', async ({ is }) => {
   instance.removeListener('level-change', handle)
   instance.level = 'info'
 
-  var count = 0
+  let count = 0
 
   const l1 = () => count++
   const l2 = () => count++
@@ -549,4 +551,11 @@ test('changing level from info to silent and back to info in child logger', asyn
   child.info('hello world')
   result = await once(stream, 'data')
   check(is, result, expected.level, expected.msg)
+})
+
+// testing for potential loss of Pino constructor scope from serializers - an edge case with circular refs see:  https://github.com/pinojs/pino/issues/833
+test('trying to get levels when `this` is no longer a Pino instance returns an empty string', async ({ is }) => {
+  const notPinoInstance = { some: 'object', getLevel: levelsLib.getLevel }
+  const blankedLevelValue = notPinoInstance.getLevel()
+  is(blankedLevelValue, '')
 })

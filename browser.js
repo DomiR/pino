@@ -1,11 +1,11 @@
 'use strict'
 
-var format = require('quick-format-unescaped')
+const format = require('quick-format-unescaped')
 
 module.exports = pino
 
-var _console = pfGlobalThisOrFallback().console || {}
-var stdSerializers = {
+const _console = pfGlobalThisOrFallback().console || {}
+const stdSerializers = {
   mapHttpRequest: mock,
   mapHttpResponse: mock,
   wrapRequestSerializer: passthrough,
@@ -20,33 +20,33 @@ function pino (opts) {
   opts = opts || {}
   opts.browser = opts.browser || {}
 
-  var transmit = opts.browser.transmit
+  const transmit = opts.browser.transmit
   if (transmit && typeof transmit.send !== 'function') { throw Error('pino: transmit option must have a send function') }
 
-  var proto = opts.browser.write || _console
+  const proto = opts.browser.write || _console
   if (opts.browser.write) opts.browser.asObject = true
-  var serializers = opts.serializers || {}
-  var serialize = Array.isArray(opts.browser.serialize)
+  const serializers = opts.serializers || {}
+  const serialize = Array.isArray(opts.browser.serialize)
     ? opts.browser.serialize.filter(function (k) {
-      return k !== '!stdSerializers.err'
-    })
+        return k !== '!stdSerializers.err'
+      })
     : opts.browser.serialize === true ? Object.keys(serializers) : false
-  var stdErrSerialize = opts.browser.serialize
+  let stdErrSerialize = opts.browser.serialize
 
   if (
     Array.isArray(opts.browser.serialize) &&
     opts.browser.serialize.indexOf('!stdSerializers.err') > -1
   ) stdErrSerialize = false
 
-  var levels = ['error', 'fatal', 'warn', 'info', 'debug', 'trace']
+  const levels = ['error', 'fatal', 'warn', 'info', 'debug', 'trace']
 
   if (typeof proto === 'function') {
     proto.error = proto.fatal = proto.warn =
     proto.info = proto.debug = proto.trace = proto
   }
   if (opts.enabled === false) opts.level = 'silent'
-  var level = opts.level || 'info'
-  var logger = Object.create(proto)
+  const level = opts.level || 'info'
+  const logger = Object.create(proto)
   if (!logger.log) logger.log = noop
 
   Object.defineProperty(logger, 'levelVal', {
@@ -57,12 +57,13 @@ function pino (opts) {
     set: setLevel
   })
 
-  var setOpts = {
+  const setOpts = {
     name: opts.name,
     transmit,
     serialize,
     asObject: opts.browser.asObject,
-    levels
+    levels,
+    timestamp: getTimeFunction(opts)
   }
   logger.levels = pino.levels
   logger.level = level
@@ -108,7 +109,7 @@ function pino (opts) {
     if (!bindings) {
       throw new Error('missing bindings for child Pino')
     }
-    var bindingsSerializers = bindings.serializers
+    const bindingsSerializers = bindings.serializers
     if (serialize && bindingsSerializers) {
       var childSerializers = Object.assign({}, serializers, bindingsSerializers)
       var childSerialize = opts.browser.serialize === true
@@ -161,10 +162,12 @@ pino.levels = {
 }
 
 pino.stdSerializers = stdSerializers
+pino.stdTimeFunctions = Object.assign({}, { nullTime, epochTime, unixTime, isoTime })
 
 function set (opts, logger, level, fallback) {
-  var proto = Object.getPrototypeOf(logger)
-  logger[level] = logger.levelVal > logger.levels.values[level] ? noop
+  const proto = Object.getPrototypeOf(logger)
+  logger[level] = logger.levelVal > logger.levels.values[level]
+    ? noop
     : (proto[level] ? proto[level] : (_console[level] || _console[fallback] || noop))
 
   wrap(opts, logger, level)
@@ -175,9 +178,9 @@ function wrap (opts, logger, level) {
 
   logger[level] = (function (write) {
     return function LOG () {
-      var ts = Date.now()
-      var args = new Array(arguments.length)
-      var proto = (Object.getPrototypeOf && Object.getPrototypeOf(this) === _console) ? _console : this
+      const ts = opts.timestamp()
+      const args = new Array(arguments.length)
+      const proto = (Object.getPrototypeOf && Object.getPrototypeOf(this) === _console) ? _console : this
       for (var i = 0; i < args.length; i++) args[i] = arguments[i]
 
       if (opts.serialize && !opts.asObject) {
@@ -187,9 +190,9 @@ function wrap (opts, logger, level) {
       else write.apply(proto, args)
 
       if (opts.transmit) {
-        var transmitLevel = opts.transmit.level || logger.level
-        var transmitValue = pino.levels.values[transmitLevel]
-        var methodValue = pino.levels.values[level]
+        const transmitLevel = opts.transmit.level || logger.level
+        const transmitValue = pino.levels.values[transmitLevel]
+        const methodValue = pino.levels.values[level]
         if (methodValue < transmitValue) return
         transmit(this, {
           ts,
@@ -207,10 +210,15 @@ function wrap (opts, logger, level) {
 
 function asObject (logger, level, args, ts, name) {
   if (logger._serialize) applySerializers(args, logger._serialize, logger.serializers, logger._stdErrSerialize)
-  var argsCloned = args.slice()
-  var msg = argsCloned[0]
-  var o = { time: ts, level: pino.levels.values[level], name }
-  var lvl = (logger._childLevel | 0) + 1
+  const argsCloned = args.slice()
+  let msg = argsCloned[0]
+  const o = {}
+  if (ts) {
+    o.time = ts
+  }
+  o.level = pino.levels.values[level]
+  let lvl = (logger._childLevel | 0) + 1
+  o.name = name;
   if (lvl < 1) lvl = 1
   // deliberate, catching objects, arrays
   if (msg !== null && typeof msg === 'object') {
@@ -224,11 +232,11 @@ function asObject (logger, level, args, ts, name) {
 }
 
 function applySerializers (args, serialize, serializers, stdErrSerialize) {
-  for (var i in args) {
+  for (const i in args) {
     if (stdErrSerialize && args[i] instanceof Error) {
       args[i] = pino.stdSerializers.err(args[i])
     } else if (typeof args[i] === 'object' && !Array.isArray(args[i])) {
-      for (var k in args[i]) {
+      for (const k in args[i]) {
         if (serialize && serialize.indexOf(k) > -1 && k in serializers) {
           args[i][k] = serializers[k](args[i][k])
         }
@@ -239,7 +247,7 @@ function applySerializers (args, serialize, serializers, stdErrSerialize) {
 
 function bind (parent, bindings, level) {
   return function () {
-    var args = new Array(1 + arguments.length)
+    const args = new Array(1 + arguments.length)
     args[0] = bindings
     for (var i = 1; i < args.length; i++) {
       args[i] = arguments[i - 1]
@@ -249,12 +257,12 @@ function bind (parent, bindings, level) {
 }
 
 function transmit (logger, opts, args) {
-  var send = opts.send
-  var ts = opts.ts
-  var methodLevel = opts.methodLevel
-  var methodValue = opts.methodValue
-  var val = opts.val
-  var bindings = logger._logEvent.bindings
+  const send = opts.send
+  const ts = opts.ts
+  const methodLevel = opts.methodLevel
+  const methodValue = opts.methodValue
+  const val = opts.val
+  const bindings = logger._logEvent.bindings
 
   applySerializers(
     args,
@@ -286,12 +294,12 @@ function createLogEventShape (bindings) {
 }
 
 function asErrValue (err) {
-  var obj = {
+  const obj = {
     type: err.constructor.name,
     msg: err.message,
     stack: err.stack
   }
-  for (var key in err) {
+  for (const key in err) {
     if (obj[key] === undefined) {
       obj[key] = err[key]
     }
@@ -299,9 +307,24 @@ function asErrValue (err) {
   return obj
 }
 
+function getTimeFunction (opts) {
+  if (typeof opts.timestamp === 'function') {
+    return opts.timestamp
+  }
+  if (opts.timestamp === false) {
+    return nullTime
+  }
+  return epochTime
+}
+
 function mock () { return {} }
 function passthrough (a) { return a }
 function noop () {}
+
+function nullTime () { return false }
+function epochTime () { return Date.now() }
+function unixTime () { return Math.round(Date.now() / 1000.0) }
+function isoTime () { return new Date(Date.now()).toISOString() } // using Date.now() for testability
 
 /* eslint-disable */
 /* istanbul ignore next */

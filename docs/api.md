@@ -15,7 +15,7 @@
   * [logger.child()](#child)
   * [logger.bindings()](#bindings)
   * [logger.flush()](#flush)
-  * [logger.level](#level)
+  * [logger.level](#logger-level)
   * [logger.isLevelEnabled()](#islevelenabled)
   * [logger.levels](#levels)
   * [logger\[Symbol.for('pino.serializers')\]](#serializers)
@@ -99,7 +99,7 @@ logger.info('hello') // Will throw an error saying info in not found in logger o
 Default: `undefined`
 
 If provided, the `mixin` function is called each time one of the active
-logging methods is called. The function must synchronously return an
+logging methods is called. The first and only parameter is the value `mergeObject` or an empty object. The function must synchronously return an
 object. The properties of the returned object will be added to the
 logged JSON.
 
@@ -125,15 +125,15 @@ const mixin = {
 
 const logger = pino({
     mixin() {
-        return mixin
+        return mixin;
     }
 })
 
-pino.info({
+logger.info({
     description: 'Ok'
 }, 'Message 1')
 // {"level":30,"time":1591195061437,"pid":16012,"hostname":"x","appName":"My app","description":"Ok" "msg":"Message 1"}
-pino.info('Message 2')
+logger.info('Message 2')
 // {"level":30,"time":1591195061437,"pid":16012,"hostname":"x","appName":"My app","description":"Ok","msg":"Message 2"}
 // Note: the second log contains "description":"Ok" text, even if it was not provided.
 ```
@@ -153,7 +153,7 @@ Each path must be a string using a syntax which corresponds to JavaScript dot an
 If an object is supplied, three options can be specified:
   * `paths` (array): Required. An array of paths. See [redaction - Path Syntax ⇗](/docs/redaction.md#paths) for specifics.
   * `censor` (String|Function|Undefined): Optional. When supplied as a String the `censor` option will overwrite keys which are to be redacted. When set to `undefined` the the key will be removed entirely from the object.
-    The `censor` option may also be a mapping function. The (synchronous) mapping function is called with the unredacted value. The value returned from the mapping function becomes the applied censor value. Default: `'[Redacted]'`
+    The `censor` option may also be a mapping function. The (synchronous) mapping function has the signature `(value, path) => redactedValue` and is called with the unredacted `value` and `path` to the key being redacted, as an array. For example given a redaction path of `a.b.c` the `path` argument would be `['a', 'b', 'c']`. The value returned from the mapping function becomes the applied censor value. Default: `'[Redacted]'`
     value synchronously.
     Default: `'[Redacted]'`
   * `remove` (Boolean): Optional. Instead of censoring the value, remove both the key and the value. Default: `false`
@@ -161,7 +161,7 @@ If an object is supplied, three options can be specified:
 **WARNING**: Never allow user input to define redacted paths.
 
 * See the [redaction ⇗](/docs/redaction.md) documentation.
-* See [fast-redact#caveat ⇗](http://github.com/davidmarkclements/fast-redact#caveat)
+* See [fast-redact#caveat ⇗](https://github.com/davidmarkclements/fast-redact#caveat)
 
 <a id=opt-hooks></a>
 #### `hooks` (Object)
@@ -173,10 +173,10 @@ internal logger operations. Hook functions ***must*** be synchronous functions.
 ##### `logMethod`
 
 Allows for manipulating the parameters passed to logger methods. The signature
-for this hook is `logMethod (args, method) {}`, where `args` is an array
+for this hook is `logMethod (args, method, level) {}`, where `args` is an array
 of the arguments that were passed to the log method and `method` is the log
-method itself. This hook ***must*** invoke the `method` function by using
-apply, like so: `method.apply(this, newArgumentsArray)`.
+method itself, `level` is the log level itself. This hook ***must*** invoke the
+`method` function by using apply, like so: `method.apply(this, newArgumentsArray)`.
 
 For example, Pino expects a binding object to be the first parameter with an
 optional string message as the second parameter. Using this hook the parameters
@@ -184,7 +184,7 @@ can be flipped:
 
 ```js
 const hooks = {
-  logMethod (inputArgs, method) {
+  logMethod (inputArgs, method, level) {
     if (inputArgs.length >= 2) {
       const arg1 = inputArgs.shift()
       const arg2 = inputArgs.shift()
@@ -289,12 +289,20 @@ Set to `true` to logs newline delimited JSON with `\r\n` instead of `\n`.
 Default: `true`
 
 Enables or disables the inclusion of a timestamp in the
-log message. If a function is supplied, it must synchronously return a JSON string
+log message. If a function is supplied, it must synchronously return a partial JSON string
 representation of the time, e.g. `,"time":1493426328206` (which is the default).
 
 If set to `false`, no timestamp will be included in the output.
+
 See [stdTimeFunctions](#pino-stdtimefunctions) for a set of available functions
 for passing in as a value for this option.
+
+Example:
+```js
+timestamp: () => `,"time":"${new Date(Date.now()).toISOString()}"`
+// which is equivilent to:
+// timestamp: stdTimeFunctions.isoTime
+```
 
 **Caution**: attempting to format time in-process will significantly impact logging performance.
 
@@ -470,7 +478,7 @@ logger.info({MIX: {IN: true}})
 // {"level":30,"time":1531254555820,"pid":55956,"hostname":"x","MIX":{"IN":true}}
 ```
 
-<a id=message></a>
+<a id="message"></a>
 #### `message` (String)
 
 A `message` string can optionally be supplied as the first parameter, or
@@ -488,6 +496,8 @@ The `message` parameter takes precedence over the `mergedObject`.
 That is, if a `mergedObject` contains a `msg` property, and a `message` parameter
 is supplied in addition, the `msg` property in the output log will be the value of
 the `message` parameter not the value of the `msg` property on the `mergedObject`.
+See [Avoid Message Conflict](./help.md#avoid-message-conflict) for information
+on how to overcome this limitation.
 
 The `messageKey` option can be used at instantiation time to change the namespace
 from `msg` to another string as preferred.
@@ -505,7 +515,7 @@ then be interpolated accordingly.
 * See [`messageKey` pino option](#opt-messagekey)
 * See [`...interpolationValues` log method parameter](#interpolationvalues)
 
-<a id=interpolationvalues></a>
+<a id="interpolationvalues"></a>
 #### `...interpolationValues` (Any)
 
 All arguments supplied after `message` are serialized and interpolated according
@@ -545,6 +555,22 @@ const logger = pino(pinoOptions)
 
 * See [`message` log method parameter](#message)
 * See [`logMethod` hook](#logmethod)
+
+<a id="error-serialization"></a>
+#### Errors
+
+Errors can be supplied as either the first parameter or if already using `mergingObject` then as the `err` property on the `mergingObject`.
+
+> ## Note
+> This section describes the default configuration. The error serializer can be
+> mapped to a different key using the [`serializers`](#opt-serializers) option.
+```js
+logger.info(new Error("test"))
+// {"level":30,"time":1531257618044,"msg":"test","stack":"...","type":"Error","pid":55956,"hostname":"x"}
+
+logger.info({ err: new Error("test"), otherkey: 123 }, "some text")
+// {"level":30,"time":1531257618044,"err":{"msg": "test", "stack":"...","type":"Error"},"msg":"some text","pid":55956,"hostname":"x","otherkey":123}
+```
 
 <a id="trace"></a>
 ### `logger.trace([mergingObject], [message], [...interpolationValues])`
@@ -703,7 +729,7 @@ and safer logging at low demand periods.
 * See [`destination` parameter](#destination)
 * See [Asynchronous Logging ⇗](/docs/asynchronous.md)
 
-<a id="level"></a>
+<a id="logger-level"></a>
 ### `logger.level` (String) [Getter/Setter]
 
 Set this property to the desired logging level.
